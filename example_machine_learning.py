@@ -1,9 +1,10 @@
 
 import numpy as np
 import pandas as pd
-from sklearn.model_selection import train_test_split, cross_val_score
+from sklearn.model_selection import train_test_split, cross_val_score, GridSearchCV, StratifiedKFold
 from sklearn.tree import DecisionTreeClassifier
 import matplotlib.pyplot as plt
+from sklearn.ensemble import RandomForestClassifier
 
 import seaborn as sb
 
@@ -46,9 +47,9 @@ iris_data.loc[iris_data['class'] == 'Iris-versicolor', 'sepal_length_cm'].hist()
 
 # look as missing values
 print(iris_data.loc[(iris_data['sepal_length_cm'].isnull()) |
-              (iris_data['sepal_width_cm'].isnull()) |
-              (iris_data['petal_length_cm'].isnull()) |
-              (iris_data['petal_width_cm'].isnull())])
+                    (iris_data['sepal_width_cm'].isnull()) |
+                    (iris_data['petal_length_cm'].isnull()) |
+                    (iris_data['petal_width_cm'].isnull())])
 
 # Instead of dropping, we will use mean imputation
 average_petal_width = iris_data.loc[iris_data['class'] == 'Iris-setosa', 'petal_width_cm'].mean()
@@ -124,10 +125,87 @@ sb.distplot(cv_scores)
 plt.title('Average score: {}'.format(np.mean(cv_scores)))
 
 
+# ----- Parameter Tuning
+decision_tree_classifier = DecisionTreeClassifier(max_depth=1)
+
+cv_scores = cross_val_score(decision_tree_classifier, all_inputs, all_classes, cv=20)
+sb.distplot(cv_scores, kde=False)
+plt.title('Average score: {}'.format(np.mean(cv_scores)))
+
+# --- Grid Searching
+decision_tree_classifier = DecisionTreeClassifier()
+
+parameter_grid = {'max_depth': [1, 2, 3, 4, 5],
+                  'max_features': [1, 2, 3, 4]}
+
+cross_validation = StratifiedKFold(n_splits=10)
+
+grid_search = GridSearchCV(decision_tree_classifier,
+                           param_grid=parameter_grid,
+                           cv=cross_validation)
+
+grid_search.fit(all_inputs, all_classes)
+print('Best score: {}'.format(grid_search.best_score_))
+print('Best parameters: {}'.format(grid_search.best_params_))
+
+# --- Visualize
+grid_visualization = grid_search.cv_results_['mean_test_score']
+grid_visualization = np.array(grid_visualization)
+grid_visualization.shape = (5, 4)
+sb.heatmap(grid_visualization, cmap='Blues')
+plt.xticks(np.arange(4) + 0.5, grid_search.param_grid['max_features'])
+plt.yticks(np.arange(5) + 0.5, grid_search.param_grid['max_depth'][::-1])
+plt.xlabel('max_features')
+plt.ylabel('max_depth')
 
 
+# --- Bigger Grid Search
+decision_tree_classifier = DecisionTreeClassifier()
+
+parameter_grid = {'criterion': ['gini', 'entropy'],
+                  'splitter': ['best', 'random'],
+                  'max_depth': [1, 2, 3, 4, 5],
+                  'max_features': [1, 2, 3, 4]}
+
+cross_validation = StratifiedKFold(n_splits=10)
+
+grid_search = GridSearchCV(decision_tree_classifier,
+                           param_grid=parameter_grid,
+                           cv=cross_validation)
+
+grid_search.fit(all_inputs, all_classes)
+print('Best score: {}'.format(grid_search.best_score_))
+print('Best parameters: {}'.format(grid_search.best_params_))
+
+# Use a random forest this time
+random_forest_classifier = RandomForestClassifier()
+
+parameter_grid = {'n_estimators': [5, 10, 25, 50],
+                  'criterion': ['gini', 'entropy'],
+                  'max_features': [1, 2, 3, 4],
+                  'warm_start': [True, False]}
+
+cross_validation = StratifiedKFold(n_splits=10)
+
+grid_search = GridSearchCV(random_forest_classifier,
+                           param_grid=parameter_grid,
+                           cv=cross_validation)
+
+grid_search.fit(all_inputs, all_classes)
+print('Best score: {}'.format(grid_search.best_score_))
+print('Best parameters: {}'.format(grid_search.best_params_))
+
+print(grid_search.best_estimator_)
 
 
+# Compare results
+random_forest_classifier = grid_search.best_estimator_
 
+rf_df = pd.DataFrame({'accuracy': cross_val_score(random_forest_classifier, all_inputs, all_classes, cv=10),
+                       'classifier': ['Random Forest'] * 10})
+dt_df = pd.DataFrame({'accuracy': cross_val_score(decision_tree_classifier, all_inputs, all_classes, cv=10),
+                      'classifier': ['Decision Tree'] * 10})
+both_df = rf_df.append(dt_df)
 
-
+sb.boxplot(x='classifier', y='accuracy', data=both_df)
+sb.stripplot(x='classifier', y='accuracy', data=both_df, jitter=True, color='white')
