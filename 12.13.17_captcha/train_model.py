@@ -122,7 +122,7 @@ model.compile(loss="categorical_crossentropy", optimizer="adam", metrics=["accur
 
 # Train the neural network
 model.fit(X_train, Y_train,
-          validation_data=(X_test, Y_test), batch_size=32, epochs=10, verbose=1)
+          validation_data=(X_test, Y_test), batch_size=32, epochs=1, verbose=1)
 
 # Save the trained model to disk
 model.save(MODEL_FILENAME)
